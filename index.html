@@ -156,15 +156,8 @@
       
       // 管理画面
       const [adminTab, setAdminTab] = useState('addMain');
-      const [newTheme, setNewTheme] = useState({
-        name: '',
-        questions: [
-          { level: '基本', question: '', modelAnswer: '', keyPoints: [''], followUpQuestions: [''] },
-          { level: '詳細', question: '', modelAnswer: '', keyPoints: [''], followUpQuestions: [''] },
-          { level: '応用', question: '', modelAnswer: '', keyPoints: [''], followUpQuestions: [''] }
-        ]
-      });
-      const [newFollowUp, setNewFollowUp] = useState({ question: '', answer: '' });
+      const [mainMarkdownInput, setMainMarkdownInput] = useState('');
+      const [additionalMarkdownInput, setAdditionalMarkdownInput] = useState('');
       
       const messagesEndRef = useRef(null);
 
@@ -616,44 +609,41 @@ ${result.feedback}
         }
       };
 
-      // 本編に問題追加
-      const handleAddMainTheme = () => {
-        if (!newTheme.name.trim()) {
-          alert('テーマ名を入力してください');
+      // 本編にマークダウンから追加
+      const handleAddMainFromMarkdown = () => {
+        if (!mainMarkdownInput.trim()) {
+          alert('マークダウンを入力してください');
           return;
         }
+        const parsed = parseQuestionsMarkdown(mainMarkdownInput);
+        if (parsed.length === 0) {
+          alert('問題を認識できませんでした。形式を確認してください。');
+          return;
+        }
+        // IDを振り直す
         const allThemes = [...mainThemes, ...addedMainThemes];
-        const newId = Math.max(...allThemes.map(t => t.id), 0) + 1;
-        const themeToAdd = {
-          ...newTheme,
-          id: newId,
-          questions: newTheme.questions.map(q => ({
-            ...q,
-            keyPoints: q.keyPoints.filter(k => k.trim()),
-            followUpQuestions: q.followUpQuestions.filter(f => f.trim())
-          }))
-        };
-        setAddedMainThemes(prev => [...prev, themeToAdd]);
-        setNewTheme({
-          name: '',
-          questions: [
-            { level: '基本', question: '', modelAnswer: '', keyPoints: [''], followUpQuestions: [''] },
-            { level: '詳細', question: '', modelAnswer: '', keyPoints: [''], followUpQuestions: [''] },
-            { level: '応用', question: '', modelAnswer: '', keyPoints: [''], followUpQuestions: [''] }
-          ]
-        });
-        alert('本編に追加しました');
+        const maxId = Math.max(...allThemes.map(t => t.id), 0);
+        const newThemes = parsed.map((t, idx) => ({ ...t, id: maxId + idx + 1 }));
+        
+        setAddedMainThemes(prev => [...prev, ...newThemes]);
+        setMainMarkdownInput('');
+        alert(`${newThemes.length}テーマ（${newThemes.reduce((a, t) => a + t.questions.length, 0)}問）を本編に追加しました`);
       };
 
-      // 追加問題編に問題追加
-      const handleAddAdditionalQ = () => {
-        if (!newFollowUp.question.trim() || !newFollowUp.answer.trim()) {
-          alert('質問と回答を入力してください');
+      // 追加問題編にマークダウンから追加
+      const handleAddAdditionalFromMarkdown = () => {
+        if (!additionalMarkdownInput.trim()) {
+          alert('マークダウンを入力してください');
           return;
         }
-        setAddedAdditionalQs(prev => ({ ...prev, [newFollowUp.question]: newFollowUp.answer }));
-        setNewFollowUp({ question: '', answer: '' });
-        alert('追加問題編に追加しました');
+        const parsed = parseFollowUpMarkdown(additionalMarkdownInput);
+        if (Object.keys(parsed).length === 0) {
+          alert('問題を認識できませんでした。形式を確認してください。');
+          return;
+        }
+        setAddedAdditionalQs(prev => ({ ...prev, ...parsed }));
+        setAdditionalMarkdownInput('');
+        alert(`${Object.keys(parsed).length}問を追加問題編に追加しました`);
       };
 
       // 本編の追加問題を削除
@@ -670,6 +660,17 @@ ${result.feedback}
           delete updated[question];
           return updated;
         });
+      };
+      
+      // 追加した問題を全削除
+      const handleClearAddedMain = () => {
+        if (!confirm('追加した本編問題をすべて削除しますか？')) return;
+        setAddedMainThemes([]);
+      };
+      
+      const handleClearAddedAdditional = () => {
+        if (!confirm('追加した追加問題をすべて削除しますか？')) return;
+        setAddedAdditionalQs({});
       };
 
       // ローディング
@@ -866,187 +867,181 @@ ${result.feedback}
                   onClick={() => setAdminTab('addMain')}
                   className={`px-4 py-2 rounded-lg ${adminTab === 'addMain' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                 >
-                  📄 本編に追加
+                  📄 本編問題を追加
                 </button>
                 <button
                   onClick={() => setAdminTab('addAdditional')}
-                  className={`px-4 py-2 rounded-lg ${adminTab === 'addAdditional' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                  className={`px-4 py-2 rounded-lg ${adminTab === 'addAdditional' ? 'bg-green-600 text-white' : 'bg-white text-gray-700'}`}
                 >
-                  📝 追加問題編に追加
+                  📝 追加問題を追加
                 </button>
                 <button
-                  onClick={() => setAdminTab('listMain')}
-                  className={`px-4 py-2 rounded-lg ${adminTab === 'listMain' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                  onClick={() => setAdminTab('list')}
+                  className={`px-4 py-2 rounded-lg ${adminTab === 'list' ? 'bg-gray-600 text-white' : 'bg-white text-gray-700'}`}
                 >
-                  📋 本編一覧
-                </button>
-                <button
-                  onClick={() => setAdminTab('listAdditional')}
-                  className={`px-4 py-2 rounded-lg ${adminTab === 'listAdditional' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
-                >
-                  📋 追加問題一覧
+                  📋 一覧
                 </button>
               </div>
 
-              {/* 本編に追加 */}
+              {/* 本編問題を追加 */}
               {adminTab === 'addMain' && (
                 <div className="bg-white rounded-xl p-6 shadow">
-                  <h2 className="text-xl font-bold mb-4 text-blue-700">📄 本編に問題を追加</h2>
-                  <p className="text-gray-500 text-sm mb-4">追加した問題は「本編」モードで出題されます。</p>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">テーマ名</label>
-                    <input
-                      type="text"
-                      value={newTheme.name}
-                      onChange={(e) => setNewTheme({ ...newTheme, name: e.target.value })}
-                      className="w-full border rounded-lg px-4 py-2"
-                      placeholder="例: 化学物質管理"
-                    />
-                  </div>
-                  {newTheme.questions.map((q, qIdx) => (
-                    <div key={qIdx} className="mb-6 p-4 bg-gray-50 rounded-xl">
-                      <h3 className="font-bold mb-3 text-gray-700">【{q.level}問題】</h3>
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">問題文</label>
-                          <textarea
-                            value={q.question}
-                            onChange={(e) => {
-                              const updated = [...newTheme.questions];
-                              updated[qIdx].question = e.target.value;
-                              setNewTheme({ ...newTheme, questions: updated });
-                            }}
-                            className="w-full border rounded-lg px-4 py-2 h-20"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">模範解答</label>
-                          <textarea
-                            value={q.modelAnswer}
-                            onChange={(e) => {
-                              const updated = [...newTheme.questions];
-                              updated[qIdx].modelAnswer = e.target.value;
-                              setNewTheme({ ...newTheme, questions: updated });
-                            }}
-                            className="w-full border rounded-lg px-4 py-2 h-24"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  <button onClick={handleAddMainTheme} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold">
+                  <h2 className="text-xl font-bold mb-2 text-blue-700">📄 本編問題を追加</h2>
+                  <p className="text-gray-500 text-sm mb-4">予想問題集のマークダウンを貼り付けてください</p>
+                  
+                  <textarea
+                    value={mainMarkdownInput}
+                    onChange={(e) => setMainMarkdownInput(e.target.value)}
+                    placeholder="## テーマ名&#10;&#10;**Q1（基本問題）：**&#10;問題文...&#10;&#10;**【模範解答】**&#10;解答文..."
+                    className="w-full border-2 border-blue-200 rounded-xl px-4 py-3 h-64 text-sm focus:border-blue-500 focus:outline-none font-mono"
+                  />
+                  
+                  <button 
+                    onClick={handleAddMainFromMarkdown} 
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold mt-4"
+                  >
                     📄 本編に追加
                   </button>
+                  
+                  <div className="mt-4 bg-blue-50 rounded-lg p-4 text-sm">
+                    <h4 className="font-bold text-blue-800 mb-2">📝 形式</h4>
+                    <pre className="text-blue-700 text-xs whitespace-pre-wrap">{`## テーマ名
+
+**Q1（基本問題）：**
+問題文
+
+**【模範解答】**
+解答文
+
+**【この問題で試験官が見ているポイント】**
+- ポイント1
+- ポイント2
+
+**【想定される追加質問】**
+- 追加質問1`}</pre>
+                  </div>
                 </div>
               )}
 
-              {/* 追加問題編に追加 */}
+              {/* 追加問題を追加 */}
               {adminTab === 'addAdditional' && (
                 <div className="bg-white rounded-xl p-6 shadow">
-                  <h2 className="text-xl font-bold mb-4 text-green-700">📝 追加問題編に追加</h2>
-                  <p className="text-gray-500 text-sm mb-4">追加した問題は「追加問題編」モードで出題されます。</p>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">質問</label>
-                      <input
-                        type="text"
-                        value={newFollowUp.question}
-                        onChange={(e) => setNewFollowUp({ ...newFollowUp, question: e.target.value })}
-                        className="w-full border rounded-lg px-4 py-2"
-                        placeholder="例: WBGTとは何ですか"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">模範解答</label>
-                      <textarea
-                        value={newFollowUp.answer}
-                        onChange={(e) => setNewFollowUp({ ...newFollowUp, answer: e.target.value })}
-                        className="w-full border rounded-lg px-4 py-2 h-32"
-                        placeholder="模範解答を入力..."
-                      />
-                    </div>
-                    <button onClick={handleAddAdditionalQ} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold">
-                      📝 追加問題編に追加
-                    </button>
+                  <h2 className="text-xl font-bold mb-2 text-green-700">📝 追加問題を追加</h2>
+                  <p className="text-gray-500 text-sm mb-4">追加質問回答集のマークダウンを貼り付けてください</p>
+                  
+                  <textarea
+                    value={additionalMarkdownInput}
+                    onChange={(e) => setAdditionalMarkdownInput(e.target.value)}
+                    placeholder="### Q：質問文&#10;&#10;**A：** 回答文&#10;&#10;---&#10;&#10;### Q：次の質問&#10;&#10;**A：** 次の回答"
+                    className="w-full border-2 border-green-200 rounded-xl px-4 py-3 h-64 text-sm focus:border-green-500 focus:outline-none font-mono"
+                  />
+                  
+                  <button 
+                    onClick={handleAddAdditionalFromMarkdown} 
+                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold mt-4"
+                  >
+                    📝 追加問題編に追加
+                  </button>
+                  
+                  <div className="mt-4 bg-green-50 rounded-lg p-4 text-sm">
+                    <h4 className="font-bold text-green-800 mb-2">📝 形式</h4>
+                    <pre className="text-green-700 text-xs whitespace-pre-wrap">{`### Q：質問文
+
+**A：** 回答文
+
+---
+
+### Q：次の質問
+
+**A：** 次の回答`}</pre>
                   </div>
                 </div>
               )}
 
-              {/* 本編一覧 */}
-              {adminTab === 'listMain' && (
-                <div className="space-y-4">
-                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                    <h3 className="font-bold text-blue-800 mb-2">📁 ファイルから読み込み（{mainThemes.length}テーマ）</h3>
-                    <p className="text-blue-600 text-sm">data/questions.md から読み込まれた問題です</p>
-                  </div>
-                  {mainThemes.map((theme) => (
-                    <div key={theme.id} className="bg-white rounded-xl p-4 shadow border-l-4 border-gray-300">
-                      <h3 className="font-bold text-gray-800">{theme.name}</h3>
-                      <p className="text-gray-500 text-sm">{theme.questions.length}問</p>
+              {/* 一覧 */}
+              {adminTab === 'list' && (
+                <div className="space-y-6">
+                  {/* 本編 */}
+                  <div>
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="font-bold text-lg text-blue-700">📄 本編問題</h3>
+                      {addedMainThemes.length > 0 && (
+                        <button onClick={handleClearAddedMain} className="text-red-500 text-sm">
+                          追加分をすべて削除
+                        </button>
+                      )}
                     </div>
-                  ))}
-                  
-                  {addedMainThemes.length > 0 && (
-                    <>
-                      <div className="bg-green-50 rounded-xl p-4 border border-green-200 mt-6">
-                        <h3 className="font-bold text-green-800 mb-2">✏️ 手動で追加（{addedMainThemes.length}テーマ）</h3>
-                        <p className="text-green-600 text-sm">管理画面から追加した問題です</p>
-                      </div>
-                      {addedMainThemes.map((theme) => (
-                        <div key={theme.id} className="bg-white rounded-xl p-4 shadow border-l-4 border-green-400">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <h3 className="font-bold text-gray-800">{theme.name}</h3>
-                              <p className="text-gray-500 text-sm">{theme.questions.length}問</p>
-                            </div>
-                            <button onClick={() => handleDeleteAddedMainTheme(theme.id)} className="text-red-500 text-sm">
-                              削除
-                            </button>
-                          </div>
+                    
+                    {mainThemes.length > 0 && (
+                      <div className="bg-gray-50 rounded-xl p-4 mb-3">
+                        <p className="text-gray-600 text-sm mb-2">📁 ファイルから読み込み（{mainThemes.length}テーマ）</p>
+                        <div className="flex flex-wrap gap-2">
+                          {mainThemes.map(t => (
+                            <span key={t.id} className="bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs">
+                              {t.name}
+                            </span>
+                          ))}
                         </div>
-                      ))}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* 追加問題一覧 */}
-              {adminTab === 'listAdditional' && (
-                <div className="space-y-4">
-                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                    <h3 className="font-bold text-blue-800 mb-2">📁 ファイルから読み込み（{Object.keys(additionalFollowUps).length}問）</h3>
-                    <p className="text-blue-600 text-sm">data/followup.md から読み込まれた問題です</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-4 shadow max-h-64 overflow-y-auto">
-                    {Object.entries(additionalFollowUps).map(([q, a], idx) => (
-                      <div key={idx} className="py-2 border-b last:border-b-0">
-                        <p className="font-medium text-gray-800 text-sm">Q: {q}</p>
-                        <p className="text-gray-500 text-xs mt-1">A: {a.substring(0, 60)}...</p>
                       </div>
-                    ))}
+                    )}
+                    
+                    {addedMainThemes.length > 0 && (
+                      <div className="bg-blue-50 rounded-xl p-4">
+                        <p className="text-blue-600 text-sm mb-2">✏️ 手動で追加（{addedMainThemes.length}テーマ）</p>
+                        <div className="space-y-2">
+                          {addedMainThemes.map(t => (
+                            <div key={t.id} className="flex justify-between items-center bg-white rounded-lg p-2">
+                              <span className="text-gray-800 text-sm">{t.name}（{t.questions.length}問）</span>
+                              <button onClick={() => handleDeleteAddedMainTheme(t.id)} className="text-red-500 text-xs">削除</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {mainThemes.length === 0 && addedMainThemes.length === 0 && (
+                      <p className="text-gray-400 text-sm">本編問題はありません</p>
+                    )}
                   </div>
                   
-                  {Object.keys(addedAdditionalQs).length > 0 && (
-                    <>
-                      <div className="bg-green-50 rounded-xl p-4 border border-green-200 mt-6">
-                        <h3 className="font-bold text-green-800 mb-2">✏️ 手動で追加（{Object.keys(addedAdditionalQs).length}問）</h3>
-                        <p className="text-green-600 text-sm">管理画面から追加した問題です</p>
+                  {/* 追加問題編 */}
+                  <div>
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="font-bold text-lg text-green-700">📝 追加問題</h3>
+                      {Object.keys(addedAdditionalQs).length > 0 && (
+                        <button onClick={handleClearAddedAdditional} className="text-red-500 text-sm">
+                          追加分をすべて削除
+                        </button>
+                      )}
+                    </div>
+                    
+                    {Object.keys(additionalFollowUps).length > 0 && (
+                      <div className="bg-gray-50 rounded-xl p-4 mb-3">
+                        <p className="text-gray-600 text-sm">📁 ファイルから読み込み（{Object.keys(additionalFollowUps).length}問）</p>
                       </div>
-                      <div className="bg-white rounded-xl p-4 shadow">
-                        {Object.entries(addedAdditionalQs).map(([q, a], idx) => (
-                          <div key={idx} className="py-2 border-b last:border-b-0 flex justify-between items-start">
-                            <div>
-                              <p className="font-medium text-gray-800 text-sm">Q: {q}</p>
-                              <p className="text-gray-500 text-xs mt-1">A: {a.substring(0, 60)}...</p>
+                    )}
+                    
+                    {Object.keys(addedAdditionalQs).length > 0 && (
+                      <div className="bg-green-50 rounded-xl p-4">
+                        <p className="text-green-600 text-sm mb-2">✏️ 手動で追加（{Object.keys(addedAdditionalQs).length}問）</p>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {Object.entries(addedAdditionalQs).map(([q, a], idx) => (
+                            <div key={idx} className="flex justify-between items-start bg-white rounded-lg p-2">
+                              <div className="flex-1">
+                                <p className="text-gray-800 text-sm font-medium">Q: {q}</p>
+                                <p className="text-gray-500 text-xs mt-1">A: {a.substring(0, 50)}...</p>
+                              </div>
+                              <button onClick={() => handleDeleteAddedAdditionalQ(q)} className="text-red-500 text-xs ml-2">削除</button>
                             </div>
-                            <button onClick={() => handleDeleteAddedAdditionalQ(q)} className="text-red-500 text-xs ml-2">
-                              削除
-                            </button>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </>
-                  )}
+                    )}
+                    
+                    {Object.keys(additionalFollowUps).length === 0 && Object.keys(addedAdditionalQs).length === 0 && (
+                      <p className="text-gray-400 text-sm">追加問題はありません</p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
